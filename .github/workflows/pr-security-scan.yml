@@ -61,68 +61,107 @@ jobs:
           echo "" >> $GITHUB_ENV
           
           # Process Bandit results
-          if [ -f bandit-results.json ]; then
-            BANDIT_ISSUES=$(jq '.results | length' bandit-results.json)
-            BANDIT_HIGH=$(jq '.results[] | select(.issue_severity=="HIGH") | .issue_severity' bandit-results.json | wc -l)
-            BANDIT_MED=$(jq '.results[] | select(.issue_severity=="MEDIUM") | .issue_severity' bandit-results.json | wc -l)
-            BANDIT_LOW=$(jq '.results[] | select(.issue_severity=="LOW") | .issue_severity' bandit-results.json | wc -l)
-            
-            echo "### Bandit (Changed Files)" >> $GITHUB_ENV
-            echo "" >> $GITHUB_ENV
-            echo "| Severity | Count |" >> $GITHUB_ENV
-            echo "| --- | --- |" >> $GITHUB_ENV
-            echo "| 🔴 HIGH | $BANDIT_HIGH |" >> $GITHUB_ENV
-            echo "| 🟠 MEDIUM | $BANDIT_MED |" >> $GITHUB_ENV
-            echo "| 🟡 LOW | $BANDIT_LOW |" >> $GITHUB_ENV
-            echo "" >> $GITHUB_ENV
-            
-            if [ "$BANDIT_HIGH" -gt 0 ]; then
-              echo "#### 🔴 High Severity Issues" >> $GITHUB_ENV
+          if [ -f bandit-results.json ] && [ -s bandit-results.json ]; then
+            if jq empty bandit-results.json 2>/dev/null; then
+              BANDIT_ISSUES=$(jq '.results | length' bandit-results.json || echo "0")
+              BANDIT_HIGH=$(jq '.results[] | select(.issue_severity=="HIGH") | .issue_severity' bandit-results.json 2>/dev/null | wc -l || echo "0")
+              BANDIT_MED=$(jq '.results[] | select(.issue_severity=="MEDIUM") | .issue_severity' bandit-results.json 2>/dev/null | wc -l || echo "0")
+              BANDIT_LOW=$(jq '.results[] | select(.issue_severity=="LOW") | .issue_severity' bandit-results.json 2>/dev/null | wc -l || echo "0")
+              
+              echo "### Bandit (Changed Files)" >> $GITHUB_ENV
               echo "" >> $GITHUB_ENV
-              jq -r '.results[] | select(.issue_severity=="HIGH") | "- **\(.issue_text)** in `\(.filename)` line \(.line_number)"' bandit-results.json >> $GITHUB_ENV
+              echo "| Severity | Count |" >> $GITHUB_ENV
+              echo "| --- | --- |" >> $GITHUB_ENV
+              echo "| 🔴 HIGH | $BANDIT_HIGH |" >> $GITHUB_ENV
+              echo "| 🟠 MEDIUM | $BANDIT_MED |" >> $GITHUB_ENV
+              echo "| 🟡 LOW | $BANDIT_LOW |" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              
+              if [ "$BANDIT_HIGH" -gt 0 ]; then
+                echo "#### 🔴 High Severity Issues" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                jq -r '.results[] | select(.issue_severity=="HIGH") | "- **\(.issue_text)** in `\(.filename)` line \(.line_number)"' bandit-results.json >> $GITHUB_ENV 2>/dev/null || echo "Error parsing high severity issues" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+              fi
+            else
+              echo "### Bandit (Changed Files)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "⚠️ Error parsing Bandit results" >> $GITHUB_ENV
               echo "" >> $GITHUB_ENV
             fi
+          else
+            echo "### Bandit (Changed Files)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "No results found" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
           fi
           
           # Process Safety results
-          if [ -f safety-results.json ]; then
-            SAFETY_ISSUES=$(jq '.vulnerabilities | length' safety-results.json)
-            
-            echo "### Safety (Dependency Check)" >> $GITHUB_ENV
-            echo "" >> $GITHUB_ENV
-            echo "Found $SAFETY_ISSUES vulnerable dependencies" >> $GITHUB_ENV
-            echo "" >> $GITHUB_ENV
-            
-            if [ "$SAFETY_ISSUES" -gt 0 ]; then
-              echo "| Package | Vulnerability | Severity |" >> $GITHUB_ENV
-              echo "| --- | --- | --- |" >> $GITHUB_ENV
-              jq -r '.vulnerabilities[] | "| \(.package_name) \(.affected_versions) | \(.vulnerability_id) | \(.severity) |"' safety-results.json >> $GITHUB_ENV
+          if [ -f safety-results.json ] && [ -s safety-results.json ]; then
+            if jq empty safety-results.json 2>/dev/null; then
+              SAFETY_ISSUES=$(jq '.vulnerabilities | length' safety-results.json 2>/dev/null || echo "0")
+              
+              echo "### Safety (Dependency Check)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "Found $SAFETY_ISSUES vulnerable dependencies" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              
+              if [ "$SAFETY_ISSUES" -gt 0 ]; then
+                echo "| Package | Vulnerability | Severity |" >> $GITHUB_ENV
+                echo "| --- | --- | --- |" >> $GITHUB_ENV
+                jq -r '.vulnerabilities[] | "| \(.package_name) \(.affected_versions) | \(.vulnerability_id) | \(.severity) |"' safety-results.json >> $GITHUB_ENV 2>/dev/null || echo "| Error parsing vulnerabilities | | |" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+              fi
+            else
+              echo "### Safety (Dependency Check)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "⚠️ Error parsing Safety results" >> $GITHUB_ENV
               echo "" >> $GITHUB_ENV
             fi
+          else
+            echo "### Safety (Dependency Check)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "No results found" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
           fi
           
           # Process Semgrep results
-          if [ -f semgrep-results.json ]; then
-            SEMGREP_ISSUES=$(jq '.results | length' semgrep-results.json)
-            
-            echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
-            echo "" >> $GITHUB_ENV
-            echo "Found $SEMGREP_ISSUES code pattern issues" >> $GITHUB_ENV
-            echo "" >> $GITHUB_ENV
-            
-            if [ "$SEMGREP_ISSUES" -gt 0 ]; then
-              echo "| File | Rule | Severity |" >> $GITHUB_ENV
-              echo "| --- | --- | --- |" >> $GITHUB_ENV
-              jq -r '.results[] | "| \(.path) | \(.check_id) | \(.extra.severity) |"' semgrep-results.json >> $GITHUB_ENV
+          if [ -f semgrep-results.json ] && [ -s semgrep-results.json ]; then
+            if jq empty semgrep-results.json 2>/dev/null; then
+              SEMGREP_ISSUES=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo "0")
+              
+              echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "Found $SEMGREP_ISSUES code pattern issues" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              
+              if [ "$SEMGREP_ISSUES" -gt 0 ]; then
+                echo "| File | Rule | Severity |" >> $GITHUB_ENV
+                echo "| --- | --- | --- |" >> $GITHUB_ENV
+                jq -r '.results[] | "| \(.path) | \(.check_id) | \(.extra.severity) |"' semgrep-results.json >> $GITHUB_ENV 2>/dev/null || echo "| Error parsing code patterns | | |" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+              fi
+            else
+              echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "⚠️ Error parsing Semgrep results" >> $GITHUB_ENV
               echo "" >> $GITHUB_ENV
             fi
+          else
+            echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "No results found" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
           fi
           
           # Add recommendation
           echo "### 💡 Recommendation" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           
-          CRITICAL_COUNT=$(( BANDIT_HIGH + $(jq '.vulnerabilities[] | select(.severity=="critical" or .severity=="high") | .severity' safety-results.json 2>/dev/null | wc -l) ))
+          # Safely calculate critical issues
+          BANDIT_HIGH=${BANDIT_HIGH:-0}
+          SAFETY_CRITICAL=$(jq '.vulnerabilities[] | select(.severity=="critical" or .severity=="high") | .severity' safety-results.json 2>/dev/null | wc -l || echo "0")
+          CRITICAL_COUNT=$((BANDIT_HIGH + SAFETY_CRITICAL))
           
           if [ "$CRITICAL_COUNT" -gt 0 ]; then
             echo "⚠️ **Critical security issues found. Please address them before merging.**" >> $GITHUB_ENV
