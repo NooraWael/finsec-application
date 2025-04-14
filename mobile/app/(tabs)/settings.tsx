@@ -59,7 +59,7 @@ export default function SettingsScreen() {
         { icon: Bell, label: 'Notifications', onPress: navigateToNotifications },
         { icon: Shield, label: 'Security', onPress: navigateToSecurity },
         { icon: CreditCard, label: 'Payment Methods', onPress: navigateToPaymentMethods },
-        {icon: HelpCircle, label: 'Privacy Policy', onPress: () => router.push('/info')},
+        {icon: HelpCircle, label: 'Learn Here', onPress: () => router.push('/info')},
       ]
     },
     {
