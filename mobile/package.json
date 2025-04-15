@@ -14,6 +14,7 @@
     "@expo-google-fonts/inter": "^0.2.3",
     "@expo/vector-icons": "^14.0.2",
     "@lucide/lab": "^0.1.2",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
     "expo": "~52.0.36",
@@ -50,7 +51,10 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["lucide-react-native", "@lucide/lab"]
+        "exclude": [
+          "lucide-react-native",
+          "@lucide/lab"
+        ]
       }
     }
   }

@@ -1,0 +1,251 @@
+name: PR Security Scan
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'finsec-api/finsec_api/**'
+      - 'finsec-api/app/**'
+      - 'finsec-api/finsec_api/requirements.txt'
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for proper diff analysis
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit safety semgrep
+          
+      - name: Check for modified Python files
+        id: changed-files
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD | grep '\.py$' | tr '\n' ' ' || echo "")
+          echo "Changed Python files: $CHANGED_FILES"
+          echo "python_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+      
+      - name: Run Bandit on changed files
+        if: steps.changed-files.outputs.python_files != ''
+        run: |
+          bandit -r ${{ steps.changed-files.outputs.python_files }} -f json -o bandit-results.json || echo "Bandit found issues"
+      
+      - name: Run Bandit on backend code
+        run: |
+          bandit -r finsec-api/finsec_api -r finsec-api/app -ll -f json -o bandit-full-results.json || echo "Bandit found issues"
+      
+      - name: Run Safety dependency check
+        run: |
+          # First, try to save the output directly
+          pip install -U safety  # Ensure latest version
+          
+          # Save the raw output to a text file for inspection
+          safety check -r finsec-api/finsec_api/requirements.txt --json > safety-raw.json || echo "Safety found issues"
+          
+          # Create a simplified version by processing the raw output
+          echo "Creating a safety report"
+          
+          # Create a simplified report in plain text format that doesn't depend on JSON parsing
+          safety check -r finsec-api/finsec_api/requirements.txt --output text > safety-report.txt || echo "Safety found issues"
+          
+          # Count vulnerabilities by severity for the PR comment
+          if [ -f safety-report.txt ]; then
+            echo "Counting vulnerabilities by severity..."
+            CRITICAL_COUNT=$(grep -c "Critical" safety-report.txt || echo "0")
+            HIGH_COUNT=$(grep -c "High" safety-report.txt || echo "0") 
+            MEDIUM_COUNT=$(grep -c "Medium" safety-report.txt || echo "0")
+            LOW_COUNT=$(grep -c "Low" safety-report.txt || echo "0")
+            
+            echo "Critical: $CRITICAL_COUNT, High: $HIGH_COUNT, Medium: $MEDIUM_COUNT, Low: $LOW_COUNT" > safety-summary.txt
+          fi
+        
+      - name: Run Semgrep
+        run: |
+          semgrep --config=p/python --config=p/security-audit finsec-api/finsec_api finsec-api/app --json > semgrep-results.json || echo "Semgrep found issues"
+      
+      - name: Generate PR comment
+        id: generate-comment
+        run: |
+          echo "Generating security report for PR #${{ github.event.pull_request.number }}"
+          
+          echo "COMMENT<<EOF" >> $GITHUB_ENV
+          echo "## 🔒 Security Scan Results" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          
+          # Process Bandit results
+          if [ -f bandit-results.json ] && [ -s bandit-results.json ]; then
+            if jq empty bandit-results.json 2>/dev/null; then
+              BANDIT_ISSUES=$(jq '.results | length' bandit-results.json || echo "0")
+              BANDIT_HIGH=$(jq '.results[] | select(.issue_severity=="HIGH") | .issue_severity' bandit-results.json 2>/dev/null | wc -l || echo "0")
+              BANDIT_MED=$(jq '.results[] | select(.issue_severity=="MEDIUM") | .issue_severity' bandit-results.json 2>/dev/null | wc -l || echo "0")
+              BANDIT_LOW=$(jq '.results[] | select(.issue_severity=="LOW") | .issue_severity' bandit-results.json 2>/dev/null | wc -l || echo "0")
+              
+              echo "### Bandit (Changed Files)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "| Severity | Count |" >> $GITHUB_ENV
+              echo "| --- | --- |" >> $GITHUB_ENV
+              echo "| 🔴 HIGH | $BANDIT_HIGH |" >> $GITHUB_ENV
+              echo "| 🟠 MEDIUM | $BANDIT_MED |" >> $GITHUB_ENV
+              echo "| 🟡 LOW | $BANDIT_LOW |" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              
+              if [ "$BANDIT_HIGH" -gt 0 ]; then
+                echo "#### 🔴 High Severity Issues" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                jq -r '.results[] | select(.issue_severity=="HIGH") | "- **\(.issue_text)** in `\(.filename)` line \(.line_number)"' bandit-results.json >> $GITHUB_ENV 2>/dev/null || echo "Error parsing high severity issues" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+              fi
+            else
+              echo "### Bandit (Changed Files)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "⚠️ Error parsing Bandit results" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+            fi
+          else
+            echo "### Bandit (Changed Files)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "No results found" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+          fi
+          
+          # Process Safety results - COMPLETELY REWRITTEN
+          echo "### Safety (Dependency Check)" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          
+          if [ -f safety-summary.txt ] && [ -s safety-summary.txt ]; then
+            # Read the summary information
+            SAFETY_SUMMARY=$(cat safety-summary.txt)
+            echo "Dependency vulnerabilities found:" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "| Severity | Count |" >> $GITHUB_ENV
+            echo "| --- | --- |" >> $GITHUB_ENV
+            
+            # Extract counts from the summary
+            CRITICAL_COUNT=$(echo "$SAFETY_SUMMARY" | grep -o "Critical: [0-9]*" | awk '{print $2}')
+            HIGH_COUNT=$(echo "$SAFETY_SUMMARY" | grep -o "High: [0-9]*" | awk '{print $2}')
+            MEDIUM_COUNT=$(echo "$SAFETY_SUMMARY" | grep -o "Medium: [0-9]*" | awk '{print $2}')
+            LOW_COUNT=$(echo "$SAFETY_SUMMARY" | grep -o "Low: [0-9]*" | awk '{print $2}')
+            
+            echo "| 🔴 CRITICAL | ${CRITICAL_COUNT:-0} |" >> $GITHUB_ENV
+            echo "| 🔴 HIGH | ${HIGH_COUNT:-0} |" >> $GITHUB_ENV
+            echo "| 🟠 MEDIUM | ${MEDIUM_COUNT:-0} |" >> $GITHUB_ENV
+            echo "| 🟡 LOW | ${LOW_COUNT:-0} |" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            
+            # Add detailed vulnerability report if any issues were found
+            if [ -f safety-report.txt ] && [ -s safety-report.txt ]; then
+              TOTAL_COUNT=$((${CRITICAL_COUNT:-0} + ${HIGH_COUNT:-0} + ${MEDIUM_COUNT:-0} + ${LOW_COUNT:-0}))
+              
+              if [ "$TOTAL_COUNT" -gt 0 ]; then
+                echo "#### Vulnerability Details" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                echo "\`\`\`" >> $GITHUB_ENV
+                # Add the first 30 lines of the report, or the whole thing if smaller
+                head -n 30 safety-report.txt >> $GITHUB_ENV
+                echo "\`\`\`" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                
+                # Add a note if we truncated the report
+                REPORT_LINES=$(wc -l < safety-report.txt)
+                if [ "$REPORT_LINES" -gt 30 ]; then
+                  echo "**Note:** Full report truncated. Found $REPORT_LINES lines of vulnerability data." >> $GITHUB_ENV
+                  echo "" >> $GITHUB_ENV
+                fi
+              else
+                echo "✅ No vulnerabilities found in dependencies" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+              fi
+            else
+              echo "⚠️ Could not generate detailed vulnerability report" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+            fi
+          else
+            echo "No vulnerability summary available" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            
+            # Add a fallback in case we couldn't parse the output but still have a raw file
+            if [ -f safety-raw.json ] && [ -s safety-raw.json ]; then
+              echo "Raw safety check output available but couldn't be fully processed." >> $GITHUB_ENV
+              echo "Please check the workflow logs for more details." >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+            fi
+          fi
+          
+          # Process Semgrep results
+          if [ -f semgrep-results.json ] && [ -s semgrep-results.json ]; then
+            if jq empty semgrep-results.json 2>/dev/null; then
+              SEMGREP_ISSUES=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo "0")
+              
+              echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "Found $SEMGREP_ISSUES code pattern issues" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              
+              if [ "$SEMGREP_ISSUES" -gt 0 ]; then
+                echo "| File | Rule | Severity |" >> $GITHUB_ENV
+                echo "| --- | --- | --- |" >> $GITHUB_ENV
+                jq -r '.results[] | "| \(.path) | \(.check_id) | \(.extra.severity) |"' semgrep-results.json >> $GITHUB_ENV 2>/dev/null || echo "| Error parsing code patterns | | |" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+              fi
+            else
+              echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              echo "⚠️ Error parsing Semgrep results" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+            fi
+          else
+            echo "### Semgrep (Code Pattern Analysis)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "No results found" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+          fi
+          
+          # Add recommendation
+          echo "### 💡 Recommendation" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          
+          # Safely calculate critical issues
+          BANDIT_HIGH=${BANDIT_HIGH:-0}
+          SAFETY_CRITICAL=${CRITICAL_COUNT:-0}
+          SAFETY_HIGH=${HIGH_COUNT:-0}
+          
+          CRITICAL_TOTAL=$((BANDIT_HIGH + SAFETY_CRITICAL + SAFETY_HIGH))
+          
+          if [ "$CRITICAL_TOTAL" -gt 0 ]; then
+            echo "⚠️ **Critical or high security issues found. Please address them before merging.**" >> $GITHUB_ENV
+          else
+            echo "✅ No critical security issues detected. Review any medium/low findings for potential improvements." >> $GITHUB_ENV
+          fi
+          
+          echo "EOF" >> $GITHUB_ENV
+      
+      - name: Post comment to PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const comment = process.env.COMMENT;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+            
+            // Check if there are critical issues to fail the workflow
+            const criticalRegex = /🔴 HIGH \| (\d+)/;
+            const match = comment.match(criticalRegex);
+            
+            if (match && parseInt(match[1]) > 0) {
+              core.setFailed("Critical security vulnerabilities detected");
+            }
