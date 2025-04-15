@@ -45,7 +45,11 @@ jobs:
       
       - name: Run Safety dependency check
         run: |
+          # Add debugging to check the output format
           safety check -r finsec-api/finsec_api/requirements.txt --json > safety-results.json || echo "Safety found issues"
+          # Print first few lines of the output to help with debugging
+          echo "Safety output format:"
+          head -n 20 safety-results.json || true
         
       - name: Run Semgrep
         run: |
@@ -96,32 +100,66 @@ jobs:
             echo "" >> $GITHUB_ENV
           fi
           
-          # Process Safety results
+          # Process Safety results - FIXED VERSION
           if [ -f safety-results.json ] && [ -s safety-results.json ]; then
+            echo "### Safety (Dependency Check)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            
+            # First, check if we can parse the JSON
             if jq empty safety-results.json 2>/dev/null; then
-              SAFETY_ISSUES=$(jq '.vulnerabilities | length' safety-results.json 2>/dev/null || echo "0")
-              
-              echo "### Safety (Dependency Check)" >> $GITHUB_ENV
-              echo "" >> $GITHUB_ENV
-              echo "Found $SAFETY_ISSUES vulnerable dependencies" >> $GITHUB_ENV
-              echo "" >> $GITHUB_ENV
-              
-              if [ "$SAFETY_ISSUES" -gt 0 ]; then
-                echo "| Package | Vulnerability | Severity |" >> $GITHUB_ENV
-                echo "| --- | --- | --- |" >> $GITHUB_ENV
-                jq -r '.vulnerabilities[] | "| \(.package_name) \(.affected_versions) | \(.vulnerability_id) | \(.severity) |"' safety-results.json >> $GITHUB_ENV 2>/dev/null || echo "| Error parsing vulnerabilities | | |" >> $GITHUB_ENV
+              # Check if the JSON has the expected structure
+              if jq -e '.vulnerabilities' safety-results.json >/dev/null 2>&1; then
+                # New format with .vulnerabilities key
+                SAFETY_ISSUES=$(jq '.vulnerabilities | length' safety-results.json 2>/dev/null || echo "0")
+                echo "Found $SAFETY_ISSUES vulnerable dependencies" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                
+                if [ "$SAFETY_ISSUES" -gt 0 ]; then
+                  echo "| Package | Vulnerability | Severity |" >> $GITHUB_ENV
+                  echo "| --- | --- | --- |" >> $GITHUB_ENV
+                  jq -r '.vulnerabilities[] | "| \(.package_name) \(.affected_versions) | \(.vulnerability_id) | \(.severity) |"' safety-results.json >> $GITHUB_ENV 2>/dev/null || echo "| Error parsing vulnerabilities | | |" >> $GITHUB_ENV
+                  echo "" >> $GITHUB_ENV
+                else
+                  echo "✅ No vulnerable dependencies found" >> $GITHUB_ENV
+                  echo "" >> $GITHUB_ENV
+                fi
+              elif jq -e '.[0]' safety-results.json >/dev/null 2>&1; then
+                # Alternative format with array of vulnerabilities at the root
+                SAFETY_ISSUES=$(jq '. | length' safety-results.json 2>/dev/null || echo "0")
+                echo "Found $SAFETY_ISSUES vulnerable dependencies" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                
+                if [ "$SAFETY_ISSUES" -gt 0 ]; then
+                  echo "| Package | Vulnerability | Severity |" >> $GITHUB_ENV
+                  echo "| --- | --- | --- |" >> $GITHUB_ENV
+                  jq -r '.[] | "| \(.package_name) \(.affected_version) | \(.vulnerability_id) | \(.severity) |"' safety-results.json >> $GITHUB_ENV 2>/dev/null || echo "| Error parsing vulnerabilities | | |" >> $GITHUB_ENV
+                  echo "" >> $GITHUB_ENV
+                else
+                  echo "✅ No vulnerable dependencies found" >> $GITHUB_ENV
+                  echo "" >> $GITHUB_ENV
+                fi
+              else
+                # Print the structure to help with future debugging
+                echo "⚠️ JSON has an unexpected structure. First few keys:" >> $GITHUB_ENV
+                jq 'keys' safety-results.json >> $GITHUB_ENV 2>/dev/null || echo "Unable to determine structure" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                # Attempt a generic count of vulnerabilities if possible
+                if jq -e '.vulnerabilities' safety-results.json >/dev/null 2>&1; then
+                  SAFETY_COUNT=$(jq '.vulnerabilities | length' safety-results.json 2>/dev/null || echo "unknown")
+                  echo "Found approximately $SAFETY_COUNT issues" >> $GITHUB_ENV
+                fi
                 echo "" >> $GITHUB_ENV
               fi
             else
-              echo "### Safety (Dependency Check)" >> $GITHUB_ENV
+              echo "⚠️ Error parsing Safety results - Invalid JSON format" >> $GITHUB_ENV
               echo "" >> $GITHUB_ENV
-              echo "⚠️ Error parsing Safety results" >> $GITHUB_ENV
+              echo "Please check the Safety tool output manually" >> $GITHUB_ENV
               echo "" >> $GITHUB_ENV
             fi
           else
             echo "### Safety (Dependency Check)" >> $GITHUB_ENV
             echo "" >> $GITHUB_ENV
-            echo "No results found" >> $GITHUB_ENV
+            echo "No results found or empty file" >> $GITHUB_ENV
             echo "" >> $GITHUB_ENV
           fi
           
@@ -160,7 +198,16 @@ jobs:
           
           # Safely calculate critical issues
           BANDIT_HIGH=${BANDIT_HIGH:-0}
-          SAFETY_CRITICAL=$(jq '.vulnerabilities[] | select(.severity=="critical" or .severity=="high") | .severity' safety-results.json 2>/dev/null | wc -l || echo "0")
+          
+          # Use conditional logic based on what structure we found
+          if jq -e '.vulnerabilities' safety-results.json >/dev/null 2>&1; then
+            SAFETY_CRITICAL=$(jq '.vulnerabilities[] | select(.severity=="critical" or .severity=="high") | .severity' safety-results.json 2>/dev/null | wc -l || echo "0")
+          elif jq -e '.[0]' safety-results.json >/dev/null 2>&1; then
+            SAFETY_CRITICAL=$(jq '.[] | select(.severity=="critical" or .severity=="high") | .severity' safety-results.json 2>/dev/null | wc -l || echo "0")
+          else
+            SAFETY_CRITICAL=0
+          fi
+          
           CRITICAL_COUNT=$((BANDIT_HIGH + SAFETY_CRITICAL))
           
           if [ "$CRITICAL_COUNT" -gt 0 ]; then
@@ -192,88 +239,3 @@ jobs:
             if (match && parseInt(match[1]) > 0) {
               core.setFailed("Critical security vulnerabilities detected");
             }
-              - name: Generate detailed security report
-  run: |
-    # Create a directory for reports
-    mkdir -p security-reports
-    
-    # Generate a timestamp for the report
-    TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
-    
-    # Create a comprehensive report file
-    echo "# Security Scan Report - $TIMESTAMP" > security-reports/security-report-$TIMESTAMP.md
-    echo "" >> security-reports/security-report-$TIMESTAMP.md
-    echo "## Summary" >> security-reports/security-report-$TIMESTAMP.md
-    echo "" >> security-reports/security-report-$TIMESTAMP.md
-    
-    # Add Bandit summary
-    if [ -f bandit-full-results.json ] && [ -s bandit-full-results.json ]; then
-      echo "### Bandit Results" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-      BANDIT_HIGH=$(jq '.results[] | select(.issue_severity=="HIGH") | .issue_severity' bandit-full-results.json 2>/dev/null | wc -l || echo "0")
-      BANDIT_MED=$(jq '.results[] | select(.issue_severity=="MEDIUM") | .issue_severity' bandit-full-results.json 2>/dev/null | wc -l || echo "0")
-      BANDIT_LOW=$(jq '.results[] | select(.issue_severity=="LOW") | .issue_severity' bandit-full-results.json 2>/dev/null | wc -l || echo "0")
-      
-      echo "- **HIGH**: $BANDIT_HIGH issues" >> security-reports/security-report-$TIMESTAMP.md
-      echo "- **MEDIUM**: $BANDIT_MED issues" >> security-reports/security-report-$TIMESTAMP.md
-      echo "- **LOW**: $BANDIT_LOW issues" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-      
-      # Add detailed findings
-      echo "### Detailed Bandit Findings" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-      jq -r '.results[] | "#### \(.issue_text)\n- **Severity**: \(.issue_severity)\n- **Confidence**: \(.issue_confidence)\n- **File**: \(.filename)\n- **Line**: \(.line_number)\n- **Code**: ```python\n\(.code)\n```\n"' bandit-full-results.json >> security-reports/security-report-$TIMESTAMP.md 2>/dev/null || echo "Error parsing Bandit results" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-    fi
-    
-    # Add Semgrep summary
-    if [ -f semgrep-results.json ] && [ -s semgrep-results.json ]; then
-      echo "### Semgrep Results" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-      SEMGREP_ISSUES=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo "0")
-      
-      echo "Found $SEMGREP_ISSUES code pattern issues" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-      
-      # Add detailed semgrep findings
-      echo "### Detailed Semgrep Findings" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-      jq -r '.results[] | "#### \(.check_id)\n- **Severity**: \(.extra.severity)\n- **File**: \(.path)\n- **Line**: \(.start.line)-\(.end.line)\n- **Message**: \(.extra.message)\n- **Code**: ```python\n\(.extra.lines)\n```\n"' semgrep-results.json >> security-reports/security-report-$TIMESTAMP.md 2>/dev/null || echo "Error parsing Semgrep results" >> security-reports/security-report-$TIMESTAMP.md
-      echo "" >> security-reports/security-report-$TIMESTAMP.md
-    fi
-    
-    # Add safety results if available
-    if [ -f safety-results.json ] && [ -s safety-results.json ]; then
-      if jq empty safety-results.json 2>/dev/null; then
-        echo "### Safety Scan Results" >> security-reports/security-report-$TIMESTAMP.md
-        echo "" >> security-reports/security-report-$TIMESTAMP.md
-        SAFETY_ISSUES=$(jq '.vulnerabilities | length' safety-results.json 2>/dev/null || echo "0")
-        
-        echo "Found $SAFETY_ISSUES vulnerable dependencies" >> security-reports/security-report-$TIMESTAMP.md
-        echo "" >> security-reports/security-report-$TIMESTAMP.md
-        
-        # Add detailed vulnerability info
-        jq -r '.vulnerabilities[] | "#### \(.package_name) \(.affected_versions)\n- **ID**: \(.vulnerability_id)\n- **Severity**: \(.severity)\n- **Advisory**: \(.advisory)\n"' safety-results.json >> security-reports/security-report-$TIMESTAMP.md 2>/dev/null || echo "Error parsing vulnerabilities" >> security-reports/security-report-$TIMESTAMP.md
-      else
-        echo "### Safety Scan Results" >> security-reports/security-report-$TIMESTAMP.md
-        echo "" >> security-reports/security-report-$TIMESTAMP.md
-        echo "Error parsing Safety results" >> security-reports/security-report-$TIMESTAMP.md
-        echo "" >> security-reports/security-report-$TIMESTAMP.md
-      fi
-    fi
-    
-    # Add raw JSON files as well
-    cp bandit-results.json security-reports/bandit-results-$TIMESTAMP.json 2>/dev/null || echo "No bandit results to copy"
-    cp bandit-full-results.json security-reports/bandit-full-results-$TIMESTAMP.json 2>/dev/null || echo "No full bandit results to copy"
-    cp semgrep-results.json security-reports/semgrep-results-$TIMESTAMP.json 2>/dev/null || echo "No semgrep results to copy"
-    cp safety-results.json security-reports/safety-results-$TIMESTAMP.json 2>/dev/null || echo "No safety results to copy"
-    
-    # Create a ZIP archive
-    zip -r security-reports-$TIMESTAMP.zip security-reports/
-
-- name: Upload security report
-  uses: actions/upload-artifact@v3
-  with:
-    name: security-scan-report
-    path: security-reports-*.zip
-    retention-days: 30
