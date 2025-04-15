@@ -192,3 +192,88 @@ jobs:
             if (match && parseInt(match[1]) > 0) {
               core.setFailed("Critical security vulnerabilities detected");
             }
+              - name: Generate detailed security report
+  run: |
+    # Create a directory for reports
+    mkdir -p security-reports
+    
+    # Generate a timestamp for the report
+    TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
+    
+    # Create a comprehensive report file
+    echo "# Security Scan Report - $TIMESTAMP" > security-reports/security-report-$TIMESTAMP.md
+    echo "" >> security-reports/security-report-$TIMESTAMP.md
+    echo "## Summary" >> security-reports/security-report-$TIMESTAMP.md
+    echo "" >> security-reports/security-report-$TIMESTAMP.md
+    
+    # Add Bandit summary
+    if [ -f bandit-full-results.json ] && [ -s bandit-full-results.json ]; then
+      echo "### Bandit Results" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+      BANDIT_HIGH=$(jq '.results[] | select(.issue_severity=="HIGH") | .issue_severity' bandit-full-results.json 2>/dev/null | wc -l || echo "0")
+      BANDIT_MED=$(jq '.results[] | select(.issue_severity=="MEDIUM") | .issue_severity' bandit-full-results.json 2>/dev/null | wc -l || echo "0")
+      BANDIT_LOW=$(jq '.results[] | select(.issue_severity=="LOW") | .issue_severity' bandit-full-results.json 2>/dev/null | wc -l || echo "0")
+      
+      echo "- **HIGH**: $BANDIT_HIGH issues" >> security-reports/security-report-$TIMESTAMP.md
+      echo "- **MEDIUM**: $BANDIT_MED issues" >> security-reports/security-report-$TIMESTAMP.md
+      echo "- **LOW**: $BANDIT_LOW issues" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+      
+      # Add detailed findings
+      echo "### Detailed Bandit Findings" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+      jq -r '.results[] | "#### \(.issue_text)\n- **Severity**: \(.issue_severity)\n- **Confidence**: \(.issue_confidence)\n- **File**: \(.filename)\n- **Line**: \(.line_number)\n- **Code**: ```python\n\(.code)\n```\n"' bandit-full-results.json >> security-reports/security-report-$TIMESTAMP.md 2>/dev/null || echo "Error parsing Bandit results" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+    fi
+    
+    # Add Semgrep summary
+    if [ -f semgrep-results.json ] && [ -s semgrep-results.json ]; then
+      echo "### Semgrep Results" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+      SEMGREP_ISSUES=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo "0")
+      
+      echo "Found $SEMGREP_ISSUES code pattern issues" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+      
+      # Add detailed semgrep findings
+      echo "### Detailed Semgrep Findings" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+      jq -r '.results[] | "#### \(.check_id)\n- **Severity**: \(.extra.severity)\n- **File**: \(.path)\n- **Line**: \(.start.line)-\(.end.line)\n- **Message**: \(.extra.message)\n- **Code**: ```python\n\(.extra.lines)\n```\n"' semgrep-results.json >> security-reports/security-report-$TIMESTAMP.md 2>/dev/null || echo "Error parsing Semgrep results" >> security-reports/security-report-$TIMESTAMP.md
+      echo "" >> security-reports/security-report-$TIMESTAMP.md
+    fi
+    
+    # Add safety results if available
+    if [ -f safety-results.json ] && [ -s safety-results.json ]; then
+      if jq empty safety-results.json 2>/dev/null; then
+        echo "### Safety Scan Results" >> security-reports/security-report-$TIMESTAMP.md
+        echo "" >> security-reports/security-report-$TIMESTAMP.md
+        SAFETY_ISSUES=$(jq '.vulnerabilities | length' safety-results.json 2>/dev/null || echo "0")
+        
+        echo "Found $SAFETY_ISSUES vulnerable dependencies" >> security-reports/security-report-$TIMESTAMP.md
+        echo "" >> security-reports/security-report-$TIMESTAMP.md
+        
+        # Add detailed vulnerability info
+        jq -r '.vulnerabilities[] | "#### \(.package_name) \(.affected_versions)\n- **ID**: \(.vulnerability_id)\n- **Severity**: \(.severity)\n- **Advisory**: \(.advisory)\n"' safety-results.json >> security-reports/security-report-$TIMESTAMP.md 2>/dev/null || echo "Error parsing vulnerabilities" >> security-reports/security-report-$TIMESTAMP.md
+      else
+        echo "### Safety Scan Results" >> security-reports/security-report-$TIMESTAMP.md
+        echo "" >> security-reports/security-report-$TIMESTAMP.md
+        echo "Error parsing Safety results" >> security-reports/security-report-$TIMESTAMP.md
+        echo "" >> security-reports/security-report-$TIMESTAMP.md
+      fi
+    fi
+    
+    # Add raw JSON files as well
+    cp bandit-results.json security-reports/bandit-results-$TIMESTAMP.json 2>/dev/null || echo "No bandit results to copy"
+    cp bandit-full-results.json security-reports/bandit-full-results-$TIMESTAMP.json 2>/dev/null || echo "No full bandit results to copy"
+    cp semgrep-results.json security-reports/semgrep-results-$TIMESTAMP.json 2>/dev/null || echo "No semgrep results to copy"
+    cp safety-results.json security-reports/safety-results-$TIMESTAMP.json 2>/dev/null || echo "No safety results to copy"
+    
+    # Create a ZIP archive
+    zip -r security-reports-$TIMESTAMP.zip security-reports/
+
+- name: Upload security report
+  uses: actions/upload-artifact@v3
+  with:
+    name: security-scan-report
+    path: security-reports-*.zip
+    retention-days: 30
