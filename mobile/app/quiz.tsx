@@ -37,7 +37,7 @@ export default function QuizScreen() {
     {
       id: 1,
       question: "Which of the following is the strongest password?",
-      image: "/api/placeholder/800/400", // Password visualization image
+      image: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=400&h=300&auto=format&fit=crop", // Password visualization image
       options: [
         "password123",
         "Birthday1990!",
@@ -50,7 +50,7 @@ export default function QuizScreen() {
     {
       id: 2,
       question: "What makes two-factor authentication more secure?",
-      image: "/api/placeholder/800/400", // 2FA visualization
+      image: "https://images.unsplash.com/photo-1669023414162-5bb06bbff0ec?q=80&w=3132&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", // 2FA visualization
       options: [
         "It uses longer passwords",
         "It requires something you know and something you have",
@@ -63,7 +63,7 @@ export default function QuizScreen() {
     {
       id: 3,
       question: "Which is a sign of a phishing attempt?",
-      image: "/api/placeholder/800/400", // Phishing example image
+      image: "https://images.unsplash.com/photo-1628763228722-b11a9c545ed7?q=80&w=2607&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", // Phishing example image
       options: [
         "Email from your bank's official domain",
         "Personalized content referencing your recent transactions",
@@ -76,7 +76,7 @@ export default function QuizScreen() {
     {
       id: 4,
       question: "When using public WiFi, what is the safest approach for banking?",
-      image: "/api/placeholder/800/400", // Public WiFi image
+      image: "https://images.unsplash.com/photo-1645725677294-ed0843b97d5c?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", // Public WiFi image
       options: [
         "Use incognito mode in your browser",
         "Use a VPN service",
@@ -89,7 +89,7 @@ export default function QuizScreen() {
     {
       id: 5,
       question: "Why should you regularly review app permissions?",
-      image: "/api/placeholder/800/400", // App permissions visualization
+      image: "https://images.unsplash.com/photo-1624969862644-791f3dc98927?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", // App permissions visualization
       options: [
         "To improve app performance",
         "To limit unnecessary access to personal data",
@@ -102,7 +102,7 @@ export default function QuizScreen() {
     {
       id: 6,
       question: "How often should you review your banking transactions?",
-      image: "/api/placeholder/800/400", // Account monitoring image
+      image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", // Account monitoring image
       options: [
         "Only when notified of suspicious activity",
         "Once a year during tax time",
