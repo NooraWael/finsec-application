@@ -1,6 +1,6 @@
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: 'https://solid-space-couscous-g6p55rwx5vqhvjr9-5000.app.github.dev',
+  BASE_URL: 'https://solid-space-dollop-jj4wxpr6r655h5v6r-5000.app.github.dev/',
   ENDPOINTS: {
     LOGIN: '/api/auth/login',
     VERIFY_MFA: '/api/auth/verify-mfa',

@@ -5,23 +5,23 @@ import json
 base_url = 'http://host.docker.internal:5000/api'
 
 # Step 1: Login and get token
-def login():
-    print('=== Login Test ===')
-    login_url = f'{base_url}/auth/login'
-    login_data = {
-        'email': 'john.doe@example.com',
-        'password': 'password123'
-    }
-    response = requests.post(login_url, json=login_data)
-    if response.status_code == 200:
-        token_data = response.json()
-        token = token_data.get('access_token')
-        print('Login successful!')
-        return token
-    else:
-        print(f'Login failed with status {response.status_code}')
-        print(f'Response: {response.text}')
-        return None
+# def login():
+#     print('=== Login Test ===')
+#     login_url = f'{base_url}/auth/login'
+#     login_data = {
+#         'email': 'john.doe@example.com',
+#         'password': 'password123'
+#     }
+#     response = requests.post(login_url, json=login_data)
+#     if response.status_code == 200:
+#         token_data = response.json()
+#         token = token_data.get('access_token')
+#         print('Login successful!')
+#         return token
+#     else:
+#         print(f'Login failed with status {response.status_code}')
+#         print(f'Response: {response.text}')
+#         return None
 
 # Step 2: Test notifications endpoints
 def test_notifications(token):

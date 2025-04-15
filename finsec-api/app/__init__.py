@@ -46,20 +46,25 @@ def create_app():
         response.headers['Expires'] = '0'
         return response
 
-    # Configure database
-    db_user = os.environ.get('MYSQL_USER', 'finsec_user')
-    db_password = os.environ.get('MYSQL_PASSWORD', 'finsec_password')
-    db_host = os.environ.get('MYSQL_HOST', 'db')
-    db_name = os.environ.get('MYSQL_DB', 'finsec_db')
-    db_port = os.environ.get('MYSQL_PORT', '3307')
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    # Configure JWT
-    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'dev_key')
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 60 * 60  # 1 hour
-    jwt = JWTManager(app)
+
+def get_env_var(var_name):
+    value = os.environ.get(var_name)
+    if not value:
+        raise EnvironmentError(f"Environment variable '{var_name}' is not set.")
+    return value
+
+# Configure database
+db_user = get_env_var('MYSQL_USER')
+db_password = get_env_var('MYSQL_PASSWORD')
+db_host = get_env_var('MYSQL_HOST')
+db_name = get_env_var('MYSQL_DB')
+db_port = os.environ.get('MYSQL_PORT', '3306')  # optional: still provide a fallback for less critical values
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Configure JWT
+app.config['JWT_SECRET_KEY'] = get_env_var('JWT_SECRET_KEY')
     
     # Initialize extensions with app
     db.init_app(app)

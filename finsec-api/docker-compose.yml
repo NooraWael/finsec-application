@@ -15,7 +15,7 @@ services:
       - MYSQL_USER=finsec_user
       - MYSQL_PASSWORD=finsec_password
       - MYSQL_DB=finsec_db
-      - JWT_SECRET_KEY=your_jwt_secret_key_change_in_production
+      - JWT_SECRET_KEY=dA8f4JYgoENpUvWZm_Pv8HSMXbQgMiROjkGpCP1vKwYYZXhctL-bIu3SpFkRk9xlZvw8XNekPZDKXz4ZcVE7nA
     depends_on:
       db:
         condition: service_healthy

@@ -58,68 +58,68 @@ def init_data():
         print("Creating test users...")
         
         # Create test users
-        test_users = [
-            {
-                'email': 'john.doe@example.com',
-                'password': 'password123',
-                'first_name': 'John',
-                'last_name': 'Doe',
-                'phone_number': '+15551234567',
-                'mfa_enabled': False
-            },
-            {
-                'email': 'jane.smith@example.com',
-                'password': 'password123',
-                'first_name': 'Jane',
-                'last_name': 'Smith',
-                'phone_number': '+15557654321',
-                'mfa_enabled': True
-            },
-            {
-                'email': 'ali@example.com',
-                'password': 'test123@123',
-                'first_name': 'Ali',
-                'last_name': 'Khan',
-                'phone_number': '+15557654321',
-                'mfa_enabled': False
-            },
-            {
-                'email': 'sarah.wilson@example.com',
-                'password': 'securePass456',
-                'first_name': 'Sarah',
-                'last_name': 'Wilson',
-                'phone_number': '+15558889999',
-                'mfa_enabled': True,
-                'preferred_name': 'Sara'
-            },
-            {
-                'email': 'michael.brown@example.com',
-                'password': 'mikePass789',
-                'first_name': 'Michael',
-                'last_name': 'Brown',
-                'phone_number': '+15553334444',
-                'mfa_enabled': False,
-                'address': '123 Main St, New York, NY 10001'
-            },
-            {
-                'email': 'emma.davis@example.com',
-                'password': 'emmaSecure2023',
-                'first_name': 'Emma',
-                'last_name': 'Davis',
-                'phone_number': '+15556667777',
-                'mfa_enabled': True,
-                'preferred_name': 'Em'
-            },
-            {
-                'email': 'david.lee@example.com',
-                'password': 'davidPass123',
-                'first_name': 'David',
-                'last_name': 'Lee',
-                'phone_number': '+15552223333',
-                'mfa_enabled': False,
-                'address': '456 Oak Ave, Los Angeles, CA 90001'
-            }
-        ]
+        # test_users = [
+        #     # {
+        #     #     'email': 'john.doe@example.com',
+        #     #     'password': 'password123',
+        #     #     'first_name': 'John',
+        #     #     'last_name': 'Doe',
+        #     #     'phone_number': '+15551234567',
+        #     #     'mfa_enabled': False
+        #     # },
+        #     {
+        #         'email': 'jane.smith@example.com',
+        #         'password': 'password123',
+        #         'first_name': 'Jane',
+        #         'last_name': 'Smith',
+        #         'phone_number': '+15557654321',
+        #         'mfa_enabled': True
+        #     },
+        #     {
+        #         'email': 'ali@example.com',
+        #         'password': 'test123@123',
+        #         'first_name': 'Ali',
+        #         'last_name': 'Khan',
+        #         'phone_number': '+15557654321',
+        #         'mfa_enabled': False
+        #     },
+        #     {
+        #         'email': 'sarah.wilson@example.com',
+        #         'password': 'securePass456',
+        #         'first_name': 'Sarah',
+        #         'last_name': 'Wilson',
+        #         'phone_number': '+15558889999',
+        #         'mfa_enabled': True,
+        #         'preferred_name': 'Sara'
+        #     },
+        #     {
+        #         'email': 'michael.brown@example.com',
+        #         'password': 'mikePass789',
+        #         'first_name': 'Michael',
+        #         'last_name': 'Brown',
+        #         'phone_number': '+15553334444',
+        #         'mfa_enabled': False,
+        #         'address': '123 Main St, New York, NY 10001'
+        #     },
+        #     {
+        #         'email': 'emma.davis@example.com',
+        #         'password': 'emmaSecure2023',
+        #         'first_name': 'Emma',
+        #         'last_name': 'Davis',
+        #         'phone_number': '+15556667777',
+        #         'mfa_enabled': True,
+        #         'preferred_name': 'Em'
+        #     },
+        #     {
+        #         'email': 'david.lee@example.com',
+        #         'password': 'davidPass123',
+        #         'first_name': 'David',
+        #         'last_name': 'Lee',
+        #         'phone_number': '+15552223333',
+        #         'mfa_enabled': False,
+        #         'address': '456 Oak Ave, Los Angeles, CA 90001'
+        #     }
+        # ]
         
         for user_data in test_users:
             # Check if user already exists
