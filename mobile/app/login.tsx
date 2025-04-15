@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { Lock, Mail, ArrowRight } from 'lucide-react-native';
+import { Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { authApi } from '@/services/api';
 import { useUser } from '@/contexts/UserContext';
+import { savePassword } from '@/utils/secure-storage'; 
 
 export default function LoginScreen() {
   const { updateUser } = useUser();
@@ -12,9 +13,39 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Rate limiter states
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  const [countdownTimer, setCountdownTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Handle countdown timer
+  useEffect(() => {
+    if (isLocked && countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+      
+      setCountdownTimer(timer);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      setIsLocked(false);
+      setFailedAttempts(0);
+      setCountdown(30);
+      if (countdownTimer) clearTimeout(countdownTimer);
+    }
+  }, [isLocked, countdown]);
 
   const handleLogin = async () => {
     setError(null);
+    
+    // Check if login is locked
+    if (isLocked) {
+      setError(`Too many failed attempts. Please wait ${countdown} seconds.`);
+      return;
+    }
+    
     setIsLoading(true);
 
     // Basic validation
@@ -35,15 +66,20 @@ export default function LoginScreen() {
     try {
       const response = await authApi.login({ email, password });
       
+      // Reset failed attempts on successful login
+      setFailedAttempts(0);
+      
       // Check if MFA is required
       if ('requireMfa' in response && response.requireMfa) {
-        // Navigate to MFA verification
+        // Store password in secure storage instead of passing as param
+        await savePassword(password);
+        
+        // Navigate to MFA verification with only necessary params
         router.push({
           pathname: '/mfa',
           params: {
             userId: response.userId.toString(),
-            email,
-            password
+            email
           }
         });
         return;
@@ -72,10 +108,20 @@ export default function LoginScreen() {
 
       router.replace('/(tabs)');
     } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
+      // Increment failed attempts
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+      
+      // Lock login after 2 failed attempts
+      if (newFailedAttempts >= 2) {
+        setIsLocked(true);
+        setError(`Too many failed attempts. Please wait ${countdown} seconds.`);
       } else {
-        setError('An unexpected error occurred');
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError('An unexpected error occurred');
+        }
       }
     } finally {
       setIsLoading(false);
@@ -117,7 +163,7 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
-              editable={!isLoading}
+              editable={!isLoading && !isLocked}
             />
           </View>
 
@@ -130,15 +176,30 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              editable={!isLoading}
+              editable={!isLoading && !isLocked}
             />
           </View>
 
+          {isLocked && (
+            <Animated.View 
+              entering={FadeInUp.duration(500)}
+              style={styles.lockoutContainer}
+            >
+              <AlertCircle size={20} color="#FF3B30" />
+              <Text style={styles.lockoutText}>
+                Account temporarily locked. Wait {countdown}s to try again.
+              </Text>
+            </Animated.View>
+          )}
+
           <TouchableOpacity 
-            style={[styles.button, isLoading && styles.buttonDisabled]}
+            style={[
+              styles.button, 
+              (isLoading || isLocked) && styles.buttonDisabled
+            ]}
             onPress={handleLogin}
             activeOpacity={0.8}
-            disabled={isLoading}
+            disabled={isLoading || isLocked}
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -245,5 +306,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     marginTop: 16,
+  },
+  lockoutContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFECE9',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  lockoutText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    marginLeft: 8,
+    flex: 1,
   },
 });
