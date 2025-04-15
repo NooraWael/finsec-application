@@ -5,6 +5,7 @@ import { Lock, Mail, ArrowRight } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { authApi } from '@/services/api';
 import { useUser } from '@/contexts/UserContext';
+import { savePassword } from '@/utils/secure-storage'; 
 
 export default function LoginScreen() {
   const { updateUser } = useUser();
@@ -37,13 +38,15 @@ export default function LoginScreen() {
       
       // Check if MFA is required
       if ('requireMfa' in response && response.requireMfa) {
-        // Navigate to MFA verification
+        // Store password in secure storage instead of passing as param
+        await savePassword(password);
+        
+        // Navigate to MFA verification with only necessary params
         router.push({
           pathname: '/mfa',
           params: {
             userId: response.userId.toString(),
-            email,
-            password
+            email
           }
         });
         return;

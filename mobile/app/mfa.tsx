@@ -6,6 +6,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { authApi } from '@/services/api';
 import { useUser } from '@/contexts/UserContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getPassword, removePassword } from '@/utils/secure-storage'; 
 
 // Constants for rate limiting
 const MAX_ATTEMPTS = 2;
@@ -15,7 +16,6 @@ export default function MFAScreen() {
   const params = useLocalSearchParams<{
     userId: string;
     email: string;
-    password: string;
   }>();
   
   const { updateUser, setAccessToken } = useUser();
@@ -150,18 +150,27 @@ export default function MFAScreen() {
 
     const otpCode = otp.join('');
     
-    if (!params.userId || !params.email || !params.password) {
+    if (!params.userId || !params.email) {
       setError('Missing required information');
       setIsLoading(false);
       return;
     }
 
     try {
+      // Get password from secure storage
+      const password = await getPassword();
+      
+      if (!password) {
+        setError('Authentication error. Please try logging in again.');
+        setIsLoading(false);
+        return;
+      }
+
       const response = await authApi.verifyMfa({
         userId: params.userId,
         otpCode,
         email: params.email,
-        password: params.password
+        password
       });
 
       // Store the access token
@@ -183,6 +192,9 @@ export default function MFAScreen() {
       if (params.userId) {
         await AsyncStorage.removeItem(`mfa_attempts_${params.userId}`);
       }
+      
+      // Clean up the password from secure storage after successful verification
+      await removePassword();
 
       router.replace('/(tabs)');
     } catch (error) {
